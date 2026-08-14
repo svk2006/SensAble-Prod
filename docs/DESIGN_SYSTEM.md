@@ -139,7 +139,7 @@ The application uses **four primary bottom navigation destinations** featuring h
 > **Navigation Boundary Rule:** Translation History is **NOT** a primary bottom navigation destination. It is accessible as a secondary action from within the Translate screen (e.g., top header action icon) or contextually related screens.
 
 ### 10.2 Core Screen Definitions
-- **Onboarding Screen:** Welcome illustration, choice between Camera Mode and Smart Glove Mode, "Get Started" primary button.
+- **Onboarding Screen:** Welcome illustration, camera feature intro, "Start Signing" primary button.
 - **Translate Screen:** Segmented mode bar, Viewfinder/Glove card, Gloss chip strip, Sentence output card with TTS, secondary History access icon.
 - **Learn Screen:** Categorized sign practice cards (Alphabet, Phrases, School Words).
 - **Progress Screen:** Practice streak counter, mastered signs grid, and daily learning goals.
@@ -159,3 +159,17 @@ To ensure SensAble avoids generic, uninspired AI-generated dashboard templates, 
 6. **No Unnecessary Statistics or Dashboards:** Do not turn the student app into a cluttered analytics dashboard with line charts and complex metrics.
 7. **No Technical Language:** Strictly map all technical hardware and network events to friendly student micro-copy (Section 9).
 8. **No Excessive Animation:** Restrain motion to functional state transitions (Section 7).
+
+---
+
+## 12. Student Onboarding Guidelines (V1 Camera Focused)
+
+### 12.1 Core Rules & Stepper Tokens
+- **Target Screen Count:** Exactly **3 screens** (Welcome -> Sign With Your Camera -> You're All Set!).
+- **Progress Stepper Indicator:** Non-color-dependent combination of shape and contrast.
+  - Active Step: **24dp x 8dp Pill** in SensAble Teal (`#00A8A8`).
+  - Inactive Step: **8dp x 8dp Circle** in Light Gray (`#E4E2DD`).
+- **Camera Focus:** V1 onboarding focuses exclusively on camera sign recognition. Smart Glove onboarding is omitted from V1 onboarding.
+- **Student Privacy Promise Rule:** Onboarding video privacy wording must be technically accurate: **"Your video stays on your device. Video frames are never recorded or uploaded."**
+- **Camera Permission Flow:** Camera permissions are **NOT** requested during onboarding. Onboarding Screen 3 concludes with *"Start Signing"*, and camera permission is requested later in context when the student enters the Translate camera experience.
+- **Onboarding Reset:** Development-only mechanism (e.g., debug build toggle). No visible "Replay Onboarding" control in production Settings.
