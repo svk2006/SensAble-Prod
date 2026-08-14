@@ -2,7 +2,7 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { useOnboarding } from '../context/OnboardingContext';
 import { BottomTabNavigator } from './BottomTabNavigator';
-import { OnboardingPlaceholderScreen } from '../screens/OnboardingPlaceholderScreen';
+import { OnboardingScreen } from '../screens/OnboardingScreen';
 import { StartupSplashScreen } from '../components/layout/StartupSplashScreen';
 
 export const AppNavigatorContent: React.FC = () => {
@@ -13,7 +13,7 @@ export const AppNavigatorContent: React.FC = () => {
   }
 
   if (!hasCompletedOnboarding) {
-    return <OnboardingPlaceholderScreen />;
+    return <OnboardingScreen />;
   }
 
   return <BottomTabNavigator />;
