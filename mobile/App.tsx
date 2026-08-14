@@ -1,25 +1,15 @@
 import React from 'react';
-import { StatusBar, StyleSheet, View } from 'react-native';
+import { StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { DesignSystemShowcase } from './src/showcase/DesignSystemShowcase';
-import { colors } from './src/theme/colors';
+import { AppNavigator } from './src/navigation/AppNavigator';
 
 function App(): React.JSX.Element {
   return (
     <SafeAreaProvider>
       <StatusBar barStyle="dark-content" />
-      <View style={styles.container}>
-        <DesignSystemShowcase />
-      </View>
+      <AppNavigator />
     </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-});
 
 export default App;
