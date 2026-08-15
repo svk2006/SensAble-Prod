@@ -9,7 +9,7 @@ export class CameraService {
         return 'granted';
       }
       if (status === 'denied' || status === 'restricted') {
-        return 'denied';
+        return 'permanently-denied';
       }
       return 'not-requested';
     } catch {
@@ -20,12 +20,18 @@ export class CameraService {
   public static async requestPermission(): Promise<CameraPermissionState> {
     try {
       const isGranted = await VisionCamera.requestCameraPermission();
-      if (isGranted) {
+      const status = VisionCamera.cameraPermissionStatus;
+      if (isGranted || status === 'authorized') {
         return 'granted';
       }
-      return 'permanently-denied';
+      if (status === 'denied' || status === 'restricted') {
+        return 'permanently-denied';
+      }
+      // Status is 'not-determined' after single denial -> can still retry
+      return 'denied';
     } catch {
       return 'denied';
     }
   }
 }
+
