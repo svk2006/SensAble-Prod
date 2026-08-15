@@ -1,7 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, Animated, AccessibilityInfo } from 'react-native';
+import { View, StyleSheet, Animated, AccessibilityInfo, AppState, AppStateStatus } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import Svg, { Rect, Path, Circle } from 'react-native-svg';
 import { SensableText, SensableButton, SensableStatusBadge } from '../../../components/ui';
+import { SensableCameraView } from '../../camera/components/SensableCameraView';
+import { useCameraPermission } from '../../camera/hooks/useCameraPermission';
 import { TranslateStateData } from '../types';
 import { colors } from '../../../theme/colors';
 import { shapes } from '../../../theme/shapes';
@@ -10,27 +13,54 @@ import { shadows } from '../../../theme/shadows';
 
 export interface CameraViewportCardProps {
   stateData: TranslateStateData;
-  onToggleCameraPlaceholder: () => void;
+  onCameraActiveChange?: (isActive: boolean) => void;
+  onToggleCameraPlaceholder?: () => void;
 }
 
 export const CameraViewportCard: React.FC<CameraViewportCardProps> = ({
   stateData,
+  onCameraActiveChange,
   onToggleCameraPlaceholder,
 }) => {
+  const { permissionState, requestPermission } = useCameraPermission();
+  const isFocused = useIsFocused();
+  const [appState, setAppState] = useState<AppStateStatus>('active');
+  const [isCameraTurnedOn, setIsCameraTurnedOn] = useState<boolean>(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const [reduceMotion, setReduceMotion] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState<boolean>(false);
 
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
   }, []);
 
+  // Listen to AppState (background / foreground)
   useEffect(() => {
-    if (reduceMotion || stateData.uiState === 'camera-off') {
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      setAppState(nextAppState);
+    });
+    return () => subscription.remove();
+  }, []);
+
+  // Active camera state depends on: permission granted + user turned on + tab focused + app active
+  const isCameraActive =
+    permissionState === 'granted' &&
+    isCameraTurnedOn &&
+    isFocused &&
+    appState === 'active';
+
+  useEffect(() => {
+    if (onCameraActiveChange) {
+      onCameraActiveChange(isCameraActive);
+    }
+  }, [isCameraActive, onCameraActiveChange]);
+
+  // 1.5s status pulse
+  useEffect(() => {
+    if (reduceMotion || !isCameraActive) {
       pulseAnim.setValue(1);
       return;
     }
 
-    // 1.5s gentle status pulse
     const pulseLoop = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
@@ -48,9 +78,44 @@ export const CameraViewportCard: React.FC<CameraViewportCardProps> = ({
     pulseLoop.start();
 
     return () => pulseLoop.stop();
-  }, [reduceMotion, stateData.uiState, pulseAnim]);
+  }, [reduceMotion, isCameraActive, pulseAnim]);
 
-  const isCameraActive = stateData.uiState !== 'camera-off';
+  const handleTurnOnCamera = async () => {
+    if (permissionState === 'granted') {
+      setIsCameraTurnedOn(true);
+      if (onToggleCameraPlaceholder) {
+        onToggleCameraPlaceholder();
+      }
+    } else {
+      const res = await requestPermission();
+      if (res === 'granted') {
+        setIsCameraTurnedOn(true);
+        if (onToggleCameraPlaceholder) {
+          onToggleCameraPlaceholder();
+        }
+      }
+    }
+  };
+
+  const handleTurnOffCamera = () => {
+    setIsCameraTurnedOn(false);
+    if (onToggleCameraPlaceholder) {
+      onToggleCameraPlaceholder();
+    }
+  };
+
+  // Determine status badge label & variant based on real state
+  const getBadgeInfo = () => {
+    if (isCameraActive) {
+      return { label: 'Ready! Show a sign', variant: 'success' as const };
+    }
+    if (permissionState === 'denied' || permissionState === 'permanently-denied') {
+      return { label: 'Permission Required', variant: 'warning' as const };
+    }
+    return { label: 'Camera is off', variant: 'neutral' as const };
+  };
+
+  const badgeInfo = getBadgeInfo();
 
   return (
     <View style={styles.cardContainer}>
@@ -58,76 +123,83 @@ export const CameraViewportCard: React.FC<CameraViewportCardProps> = ({
       <View style={styles.statusOverlay}>
         <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
           <SensableStatusBadge
-            label={stateData.statusBadgeLabel}
-            variant={stateData.statusBadgeVariant}
+            label={stateData.isDemoActive ? stateData.statusBadgeLabel : badgeInfo.label}
+            variant={stateData.isDemoActive ? stateData.statusBadgeVariant : badgeInfo.variant}
           />
         </Animated.View>
       </View>
 
       {/* Main Viewport Content */}
       <View style={styles.contentContainer}>
-        {!isCameraActive ? (
-          /* Truthful Camera Off Placeholder */
-          <View style={styles.placeholderBox}>
-            <Svg width={72} height={72} viewBox="0 0 72 72" fill="none">
-              <Circle cx="36" cy="36" r="32" fill={`${colors.primaryTeal}12`} />
-              <Path
-                d="M48 40V28A4 4 0 0 0 44 24H28A4 4 0 0 0 24 28V40A4 4 0 0 0 28 44H44A4 4 0 0 0 48 40Z"
-                stroke={colors.primaryTeal}
-                strokeWidth="3"
-              />
-              <Circle cx="36" cy="34" r="5" stroke={colors.primaryTeal} strokeWidth="3" />
-            </Svg>
-            <SensableText variant="headline" style={styles.placeholderTitle}>
-              Ready to sign?
-            </SensableText>
-            <SensableText
-              variant="body"
-              color={colors.secondaryBodyText}
-              align="center"
-              style={styles.placeholderBody}
-            >
-              Your camera will appear here when you turn it on.
-            </SensableText>
-
-            <SensableButton
-              label="Turn On Camera"
-              variant="primary"
-              onPress={onToggleCameraPlaceholder}
-              accessibilityLabel="Turn on camera preview placeholder"
-              style={styles.actionButton}
-            />
-          </View>
-        ) : (
-          /* Active Camera Viewfinder Placeholder */
+        {isCameraActive ? (
+          /* REAL Camera Preview */
           <View style={styles.activeViewfinder}>
-            <Svg width="100%" height="100%" viewBox="0 0 240 160" preserveAspectRatio="none">
-              {/* Corner Viewfinder Guide Frame */}
+            <SensableCameraView isActive={isCameraActive} position="front" />
+
+            {/* Corner Viewfinder Overlay Frame */}
+            <Svg
+              width="100%"
+              height="100%"
+              viewBox="0 0 240 160"
+              preserveAspectRatio="none"
+              style={StyleSheet.absoluteFill}
+              pointerEvents="none"
+            >
               <Rect
                 x="20"
                 y="15"
                 width="200"
                 height="130"
                 rx="12"
-                fill={`${colors.primaryTeal}08`}
+                fill="transparent"
                 stroke={colors.primaryTeal}
                 strokeWidth="2"
                 strokeDasharray="6 6"
               />
-              {/* Subtle Hand Guide Vector (Illustrative only, zero fake tracking) */}
-              <Path
-                d="M100 110V80A5 5 0 0 1 110 80V110M110 110V70A5 5 0 0 1 120 70V110M120 110V75A5 5 0 0 1 130 75V110"
-                stroke={`${colors.darkTealText}40`}
-                strokeWidth="3"
-                strokeLinecap="round"
-              />
             </Svg>
+
             <SensableButton
               label="Turn Off Camera"
               variant="secondary"
-              onPress={onToggleCameraPlaceholder}
-              accessibilityLabel="Turn off camera preview placeholder"
+              onPress={handleTurnOffCamera}
+              accessibilityLabel="Turn off native camera preview"
               style={styles.toggleOffButton}
+            />
+          </View>
+        ) : (
+          /* Camera Off / Permission Explanation Card */
+          <View style={styles.placeholderBox}>
+            <Svg width={64} height={64} viewBox="0 0 64 64" fill="none">
+              <Circle cx="32" cy="32" r="28" fill={`${colors.primaryTeal}12`} />
+              <Path
+                d="M42 36V26A4 4 0 0 0 38 22H26A4 4 0 0 0 22 26V36A4 4 0 0 0 26 40H38A4 4 0 0 0 42 36Z"
+                stroke={colors.primaryTeal}
+                strokeWidth="3"
+              />
+              <Circle cx="32" cy="31" r="4" stroke={colors.primaryTeal} strokeWidth="3" />
+            </Svg>
+
+            <SensableText variant="headline" style={styles.placeholderTitle}>
+              {permissionState === 'granted' ? 'Ready to sign?' : 'Camera Access Needed'}
+            </SensableText>
+
+            <SensableText
+              variant="body"
+              color={colors.secondaryBodyText}
+              align="center"
+              style={styles.placeholderBody}
+            >
+              {permissionState === 'granted'
+                ? 'Your camera will appear here when you turn it on.'
+                : 'SensAble uses your camera to see and understand your signs. Your video stays on your device.'}
+            </SensableText>
+
+            <SensableButton
+              label="Turn On Camera"
+              variant="primary"
+              onPress={handleTurnOnCamera}
+              accessibilityLabel="Request camera permission and start preview"
+              style={styles.actionButton}
             />
           </View>
         )}
@@ -140,7 +212,7 @@ const styles = StyleSheet.create({
   cardContainer: {
     backgroundColor: colors.surface,
     borderRadius: shapes.cardRadius,
-    minHeight: 220,
+    minHeight: 240,
     flex: 1,
     overflow: 'hidden',
     ...shadows.cardSoft,
@@ -155,19 +227,20 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: spacing.lg,
   },
   placeholderBox: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: spacing.xl,
+    padding: spacing.lg,
+    marginTop: spacing.sm,
   },
   placeholderTitle: {
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
     marginBottom: spacing.xs,
   },
   placeholderBody: {
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
+    maxWidth: 280,
   },
   actionButton: {
     minWidth: 180,
@@ -175,6 +248,7 @@ const styles = StyleSheet.create({
   activeViewfinder: {
     width: '100%',
     height: '100%',
+    minHeight: 240,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
@@ -183,5 +257,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: spacing.md,
     right: spacing.md,
+    zIndex: 20,
   },
 });
