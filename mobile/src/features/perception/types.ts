@@ -1,8 +1,7 @@
 /**
- * Gate C & C.1: Hand perception data types crossing the native → React Native boundary.
- *
- * ONLY numerical coordinates and frame metadata cross this boundary.
- * NO images, bitmaps, or pixel buffers.
+ * Gate C, C.1, Step 11A, Step 11B & Step 11C: Hand perception data types,
+ * normalized recognition structures, temporal motion features,
+ * and combined recognition representations.
  */
 
 export interface HandLandmark {
@@ -24,3 +23,7 @@ export interface HandLandmarksEvent {
   rotationDegrees: number;
   hands: HandDetection[]; // 0, 1, or 2 detected hands
 }
+
+export * from './types/normalized';
+export * from './types/motion';
+export * from './types/recognition';
