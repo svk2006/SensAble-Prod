@@ -3,7 +3,10 @@ import { View, StyleSheet, Animated, AccessibilityInfo, AppState, AppStateStatus
 import { useIsFocused } from '@react-navigation/native';
 import Svg, { Rect, Path, Circle } from 'react-native-svg';
 import { SensableText, SensableButton, SensableStatusBadge } from '../../../components/ui';
-import { SensableCameraView } from '../../camera/components/SensableCameraView';
+// Gate A & B: SensAblePerceptionView (CameraX native + MediaPipe HandLandmarker).
+import { SensAblePerceptionView } from '../../camera/components/SensAblePerceptionView';
+import { useHandPerception } from '../../perception/hooks/useHandPerception';
+import { HandLandmarkOverlay } from '../../perception/components/HandLandmarkOverlay';
 import { useCameraPermission } from '../../camera/hooks/useCameraPermission';
 import { TranslateStateData } from '../types';
 import { colors } from '../../../theme/colors';
@@ -23,7 +26,7 @@ export const CameraViewportCard: React.FC<CameraViewportCardProps> = React.memo(
   onToggleCameraPlaceholder,
 }) => {
   const { permissionState, isRequesting, requestPermission, checkPermission } = useCameraPermission();
-  const { height: windowHeight } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   // Responsively scale camera card height to ~52-55% of available content height
   const calculatedCardHeight = Math.max(320, Math.round(windowHeight * 0.44));
 
@@ -57,6 +60,15 @@ export const CameraViewportCard: React.FC<CameraViewportCardProps> = React.memo(
     appState === 'active' &&
     !hasCameraError;
 
+  // Gate C: Subscribe to real-time MediaPipe hand perception events from native
+  const perceptionData = useHandPerception(isCameraActive);
+
+  // Track viewfinder surface layout dimensions for SVG overlay scaling
+  const [viewfinderLayout, setViewfinderLayout] = useState<{ width: number; height: number }>({
+    width: Math.round(windowWidth - 32),
+    height: calculatedCardHeight,
+  });
+
   // Notify parent component of active camera status
   useEffect(() => {
     if (onCameraActiveChange) {
@@ -69,11 +81,26 @@ export const CameraViewportCard: React.FC<CameraViewportCardProps> = React.memo(
     setIsCameraReady(ready);
   }, []);
 
-  // Handle Camera Error from VisionCamera
+  // Handle Camera Error — kept for future use; not wired in Gate A.
   const handleCameraError = useCallback((_err: Error) => {
     setHasCameraError(true);
     setIsCameraReady(false);
   }, []);
+
+  // Gate A: Auto-manage isCameraReady for SensAblePerceptionView.
+  // SensableCameraView previously reported ready via onReadyChange callback.
+  // SensAblePerceptionView manages its own CameraX lifecycle natively;
+  // we approximate readiness with a 1.5 s startup window.
+  useEffect(() => {
+    if (isCameraActive) {
+      const startupTimer = setTimeout(() => {
+        setIsCameraReady(true);
+      }, 1500);
+      return () => clearTimeout(startupTimer);
+    } else {
+      setIsCameraReady(false);
+    }
+  }, [isCameraActive]);
 
   // Retry Camera action
   const handleRetryCamera = useCallback(() => {
@@ -294,16 +321,29 @@ export const CameraViewportCard: React.FC<CameraViewportCardProps> = React.memo(
     }
 
     // State 3 & 4: Active Native Camera Viewport (Camera Starting / Camera Ready)
+    // Gate A, B & C: SensAblePerceptionView owns a CameraX session + MediaPipe HandLandmarker.
+    // HandLandmarkOverlay renders real 21 landmark SVG points per detected hand.
     if (permissionState === 'granted' && isCameraTurnedOn) {
       return (
-        <View style={[styles.activeViewfinder, { minHeight: calculatedCardHeight, height: calculatedCardHeight }]}>
-          <SensableCameraView
-            isActive={isCameraActive}
-            position="front"
-            reduceMotion={reduceMotion}
-            onReadyChange={handleReadyChange}
-            onError={handleCameraError}
-          />
+        <View
+          style={[styles.activeViewfinder, { minHeight: calculatedCardHeight, height: calculatedCardHeight }]}
+          onLayout={(e) => {
+            const { width, height } = e.nativeEvent.layout;
+            if (width > 0 && height > 0) {
+              setViewfinderLayout({ width, height });
+            }
+          }}
+        >
+          {isCameraActive ? (
+            <>
+              <SensAblePerceptionView style={StyleSheet.absoluteFill} />
+              <HandLandmarkOverlay
+                perceptionData={perceptionData}
+                width={viewfinderLayout.width}
+                height={viewfinderLayout.height}
+              />
+            </>
+          ) : null}
 
           {/* Corner Viewfinder Overlay Frame (Visible when ready) */}
           {isCameraReady ? (
